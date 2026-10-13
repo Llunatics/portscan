@@ -7,6 +7,8 @@ Fast multi-threaded TCP connect scanner with banner grabbing. Lightweight recon 
 - TCP connect scan against a hostname or IP
 - Port ranges (`1-1024`), lists (`22,80,443`), or curated `top20` set
 - Multi-threaded (default 100 workers) for fast sweeps
+- Live progress indicator on scans of 20+ ports
+- Ctrl-C prints partial results immediately instead of a traceback
 - Banner grabbing on open ports, with HTTP-probe fallback
 - Clean terminal table output + JSON export
 
@@ -73,6 +75,8 @@ JSON schema:
 - TCP connect scan (no raw sockets) — runs without root.
 - Only scan hosts you own or have explicit permission to test (e.g. `scanme.nmap.org`).
 - Banner grabbing is best-effort; some services stay silent without a protocol-specific probe.
+- Interrupting with Ctrl-C cancels pending probes and prints whatever was found so far (exit code 130).
+- `--timeout` and `--banner-timeout` must be positive numbers.
 
 ## License
 

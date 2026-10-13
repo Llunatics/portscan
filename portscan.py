@@ -9,6 +9,7 @@ Usage:
 import argparse
 import concurrent.futures
 import json
+import os
 import socket
 import sys
 import time
@@ -36,12 +37,18 @@ def parse_ports(spec):
             continue
         if "-" in chunk:
             start_s, end_s = chunk.split("-", 1)
-            start, end = int(start_s), int(end_s)
+            try:
+                start, end = int(start_s), int(end_s)
+            except ValueError:
+                raise ValueError(f"invalid range: {chunk}")
             if not (0 < start <= 65535 and 0 < end <= 65535 and start <= end):
                 raise ValueError(f"invalid range: {chunk}")
             ports.update(range(start, end + 1))
         else:
-            port = int(chunk)
+            try:
+                port = int(chunk)
+            except ValueError:
+                raise ValueError(f"invalid port: {chunk}")
             if not (0 < port <= 65535):
                 raise ValueError(f"invalid port: {chunk}")
             ports.add(port)
@@ -111,6 +118,31 @@ def print_table(results, target, elapsed):
         print(f"    {port:<8}{'open':<8}{banner}")
 
 
+def show_progress(done, total):
+    """Throttled single-line progress bar for long scans."""
+    step = max(1, total // 50)
+    if done % step == 0 or done == total:
+        pct = done * 100 // total
+        print(f"\r[*] {done}/{total} ports ({pct}%)", end="", flush=True)
+
+
+def write_json(path, target, ip, ports, elapsed, results):
+    payload = {
+        "target": target,
+        "resolved_ip": ip,
+        "scanned_at": datetime.now(timezone.utc).isoformat(),
+        "ports_scanned": len(ports),
+        "elapsed_seconds": round(elapsed, 2),
+        "open_ports": [
+            {"port": port, "state": "open", "banner": banner}
+            for port, banner in results
+        ],
+    }
+    with open(path, "w") as f:
+        json.dump(payload, f, indent=2)
+    print(f"\n[+] results written to {path}")
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="portscan — fast multi-threaded TCP connect scanner with banner grabbing."
@@ -136,43 +168,54 @@ def main():
         sys.exit(f"error: {e}")
     if args.threads < 1 or args.threads > 1000:
         sys.exit("error: --threads must be between 1 and 1000")
+    if args.timeout <= 0 or args.banner_timeout <= 0:
+        sys.exit("error: --timeout and --banner-timeout must be positive")
 
     ip = resolve_target(args.target)
+    total = len(ports)
     if not args.quiet:
-        print(f"[*] scanning {args.target} ({ip}): {len(ports)} port(s), "
+        print(f"[*] scanning {args.target} ({ip}): {total} port(s), "
               f"{args.threads} threads, timeout {args.timeout}s")
 
     started = time.monotonic()
     results = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.threads) as pool:
-        futures = {
-            pool.submit(scan_port, ip, port, args.timeout, args.banner_timeout): port
-            for port in ports
-        }
+    interrupted = False
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=args.threads)
+    futures = {
+        pool.submit(scan_port, ip, port, args.timeout, args.banner_timeout): port
+        for port in ports
+    }
+    try:
+        done = 0
         for fut in concurrent.futures.as_completed(futures):
+            done += 1
+            if not args.quiet and total >= 20:
+                show_progress(done, total)
             hit = fut.result()
             if hit:
                 results.append(hit)
+    except KeyboardInterrupt:
+        interrupted = True
+        for fut in futures:
+            fut.cancel()
+        pool.shutdown(wait=False, cancel_futures=True)
+        print("\n[!] interrupted — showing partial results", flush=True)
+    else:
+        pool.shutdown(wait=True)
     elapsed = time.monotonic() - started
     results.sort(key=lambda r: r[0])
 
     print_table(results, args.target, elapsed)
 
     if args.json_out:
-        payload = {
-            "target": args.target,
-            "resolved_ip": ip,
-            "scanned_at": datetime.now(timezone.utc).isoformat(),
-            "ports_scanned": len(ports),
-            "elapsed_seconds": round(elapsed, 2),
-            "open_ports": [
-                {"port": port, "state": "open", "banner": banner}
-                for port, banner in results
-            ],
-        }
-        with open(args.json_out, "w") as f:
-            json.dump(payload, f, indent=2)
-        print(f"\n[+] results written to {args.json_out}")
+        try:
+            write_json(args.json_out, args.target, ip, ports, elapsed, results)
+        except OSError as e:
+            sys.exit(f"error: cannot write {args.json_out}: {e}")
+
+    if interrupted:
+        sys.stdout.flush()
+        os._exit(130)  # exit fast; worker threads are killed, not joined
 
 
 if __name__ == "__main__":
