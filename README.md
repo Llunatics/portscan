@@ -73,6 +73,9 @@ JSON schema:
 ## Notes
 
 - TCP connect scan (no raw sockets) — runs without root.
+- IPv4 and IPv6: every resolved address is tried per port. `resolved_ip`
+  in JSON lists all resolved addresses (comma-separated) when a hostname
+  resolves to more than one.
 - Only scan hosts you own or have explicit permission to test (e.g. `scanme.nmap.org`).
 - Banner grabbing is best-effort; some services stay silent without a protocol-specific probe.
 - Interrupting with Ctrl-C cancels pending probes and prints whatever was found so far (exit code 130).
