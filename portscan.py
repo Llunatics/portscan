@@ -15,6 +15,13 @@ import sys
 import time
 from datetime import datetime, timezone
 
+# Clean exit on broken pipes (e.g. `portscan.py ... | head`).
+try:
+    from signal import SIG_DFL, SIGPIPE, signal
+    signal(SIGPIPE, SIG_DFL)
+except Exception:
+    pass
+
 # Curated list of commonly probed ports for quick recon.
 TOP_PORTS = [
     21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445,
