@@ -40,6 +40,7 @@ python3 portscan.py --target scanme.nmap.org --ports 22,80,443 --json-out result
 | `--banner-timeout` | `2.0` | Banner read timeout (seconds) |
 | `--json-out` | — | Write results to JSON file |
 | `--quiet`, `-q` | — | Suppress progress lines |
+| `--version` | — | Print version and exit |
 
 ## Example output
 
