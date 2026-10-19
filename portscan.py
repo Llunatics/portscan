@@ -85,26 +85,40 @@ def _clean(data):
     return "".join(c for c in line if c.isprintable()).strip()[:120]
 
 
-def scan_port(target, port, timeout, banner_timeout):
-    """Return (port, banner) if open, else None."""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        sock.settimeout(timeout)
-        if sock.connect_ex((target, port)) == 0:
-            banner = grab_banner(sock, port, banner_timeout)
-            return port, banner
-    except OSError:
-        pass
-    finally:
-        sock.close()
+def scan_port(addrs, port, timeout, banner_timeout):
+    """Return (port, banner) if open on any resolved address, else None.
+
+    addrs: [(family, ip)] from resolve_target — tries every address so
+    IPv6 targets work too (an AF_INET socket would just fail on ::1).
+    """
+    for family, ip in addrs:
+        sock = socket.socket(family, socket.SOCK_STREAM)
+        try:
+            sock.settimeout(timeout)
+            if sock.connect_ex((ip, port)) == 0:
+                banner = grab_banner(sock, port, banner_timeout)
+                return port, banner
+        except OSError:
+            pass
+        finally:
+            sock.close()
     return None
 
 
 def resolve_target(target):
+    """Resolve to a de-duplicated [(family, ip)] list (v4 and v6)."""
     try:
-        return socket.gethostbyname(target)
+        infos = socket.getaddrinfo(target, None, type=socket.SOCK_STREAM)
     except socket.gaierror:
         sys.exit(f"error: cannot resolve target '{target}'")
+    addrs = []
+    for family, _, _, _, sockaddr in infos:
+        ip = sockaddr[0]
+        if (family, ip) not in addrs:
+            addrs.append((family, ip))
+    if not addrs:
+        sys.exit(f"error: cannot resolve target '{target}'")
+    return addrs
 
 
 def print_table(results, target, elapsed):
@@ -126,10 +140,10 @@ def show_progress(done, total):
         print(f"\r[*] {done}/{total} ports ({pct}%)", end="", flush=True)
 
 
-def write_json(path, target, ip, ports, elapsed, results):
+def write_json(path, target, addrs, ports, elapsed, results):
     payload = {
         "target": target,
-        "resolved_ip": ip,
+        "resolved_ip": ", ".join(ip for _, ip in addrs),
         "scanned_at": datetime.now(timezone.utc).isoformat(),
         "ports_scanned": len(ports),
         "elapsed_seconds": round(elapsed, 2),
@@ -138,16 +152,16 @@ def write_json(path, target, ip, ports, elapsed, results):
             for port, banner in results
         ],
     }
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
     print(f"\n[+] results written to {path}")
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(
         description="portscan — fast multi-threaded TCP connect scanner with banner grabbing."
     )
-    ap.add_argument("--target", "-t", required=True, help="target hostname or IP")
+    ap.add_argument("--target", "-t", required=True, help="target hostname or IP (v4/v6)")
     ap.add_argument(
         "--ports", "-p", default="top20",
         help="ports: range '1-1024', list '22,80,443', or 'top20' (default)",
@@ -160,7 +174,7 @@ def main():
     )
     ap.add_argument("--json-out", metavar="FILE", help="write results as JSON to FILE")
     ap.add_argument("--quiet", "-q", action="store_true", help="only print the table, no progress lines")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     try:
         ports = parse_ports(args.ports)
@@ -171,7 +185,8 @@ def main():
     if args.timeout <= 0 or args.banner_timeout <= 0:
         sys.exit("error: --timeout and --banner-timeout must be positive")
 
-    ip = resolve_target(args.target)
+    addrs = resolve_target(args.target)
+    ip = addrs[0][1]
     total = len(ports)
     if not args.quiet:
         print(f"[*] scanning {args.target} ({ip}): {total} port(s), "
@@ -182,7 +197,7 @@ def main():
     interrupted = False
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=args.threads)
     futures = {
-        pool.submit(scan_port, ip, port, args.timeout, args.banner_timeout): port
+        pool.submit(scan_port, addrs, port, args.timeout, args.banner_timeout): port
         for port in ports
     }
     try:
@@ -209,7 +224,7 @@ def main():
 
     if args.json_out:
         try:
-            write_json(args.json_out, args.target, ip, ports, elapsed, results)
+            write_json(args.json_out, args.target, addrs, ports, elapsed, results)
         except OSError as e:
             sys.exit(f"error: cannot write {args.json_out}: {e}")
 

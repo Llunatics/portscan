@@ -4,7 +4,7 @@ Fast multi-threaded TCP connect scanner with banner grabbing. Lightweight recon 
 
 ## Features
 
-- TCP connect scan against a hostname or IP
+- TCP connect scan against a hostname or IP (IPv4 and IPv6)
 - Port ranges (`1-1024`), lists (`22,80,443`), or curated `top20` set
 - Multi-threaded (default 100 workers) for fast sweeps
 - Live progress indicator on scans of 20+ ports
@@ -77,6 +77,16 @@ JSON schema:
 - Banner grabbing is best-effort; some services stay silent without a protocol-specific probe.
 - Interrupting with Ctrl-C cancels pending probes and prints whatever was found so far (exit code 130).
 - `--timeout` and `--banner-timeout` must be positive numbers.
+
+## Tests
+
+```bash
+python3 -m unittest discover -s tests
+```
+
+24 tests (localhost only, never the internet): port-spec parsing, banner
+cleaning/grabbing incl. the HTTP HEAD fallback, open/closed scans over
+IPv4 and IPv6, target resolution, JSON output, and CLI exit codes.
 
 ## License
 
