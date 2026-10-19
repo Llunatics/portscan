@@ -88,7 +88,7 @@ JSON schema:
 python3 -m unittest discover -s tests
 ```
 
-26 tests (localhost only, never the internet): port-spec parsing, banner
+28 tests (localhost only, never the internet): port-spec parsing, banner
 cleaning/grabbing incl. the HTTP HEAD fallback, open/closed scans over
 IPv4 and IPv6, target resolution, JSON output, and CLI exit codes.
 

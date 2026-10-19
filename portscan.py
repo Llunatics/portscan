@@ -87,6 +87,8 @@ def grab_banner(sock, port, timeout):
 
 
 def _clean(data):
+    if not data:
+        return ""
     text = data.decode("utf-8", errors="replace")
     # Keep only the first line; banners are usually single-line.
     line = text.split("\n", 1)[0]

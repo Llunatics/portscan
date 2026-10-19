@@ -87,6 +87,11 @@ class TestClean(unittest.TestCase):
     def test_bad_bytes(self):
         self.assertIn("SSH", _clean(b"SSH-\xff\xfe"))
 
+    def test_none_and_empty(self):
+        # fuzz round 2: _clean(None) used to raise AttributeError
+        self.assertEqual(_clean(None), "")
+        self.assertEqual(_clean(b""), "")
+
 
 class TestGrabBanner(unittest.TestCase):
     def test_spontaneous_banner(self):
