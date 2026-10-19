@@ -23,6 +23,7 @@ except Exception:
     pass
 
 # Curated list of commonly probed ports for quick recon.
+VERSION = "1.1.0"
 TOP_PORTS = [
     21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445,
     993, 995, 1723, 3306, 3389, 5900, 8080,
@@ -185,6 +186,7 @@ def main(argv=None):
     )
     ap.add_argument("--json-out", metavar="FILE", help="write results as JSON to FILE")
     ap.add_argument("--quiet", "-q", action="store_true", help="only print the table, no progress lines")
+    ap.add_argument("--version", action="version", version="%(prog)s " + VERSION)
     args = ap.parse_args(argv)
 
     try:

@@ -252,3 +252,12 @@ class TestSigpipe(unittest.TestCase):
     def test_broken_pipe_no_traceback(self):
         import signal
         self.assertEqual(signal.getsignal(signal.SIGPIPE), signal.SIG_DFL)
+
+
+class TestVersion(unittest.TestCase):
+    def test_version_flag(self):
+        buf = io.StringIO()
+        with self.assertRaises(SystemExit) as cm, redirect_stdout(buf):
+            main(["--version"])
+        self.assertEqual(cm.exception.code, 0)
+        self.assertIn("1.1.0", buf.getvalue())
