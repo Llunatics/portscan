@@ -107,6 +107,10 @@ def scan_port(addrs, port, timeout, banner_timeout):
 
 def resolve_target(target):
     """Resolve to a de-duplicated [(family, ip)] list (v4 and v6)."""
+    target = target.strip()
+    # Accept bracketed IPv6 literals: [::1]
+    if len(target) > 2 and target.startswith("[") and target.endswith("]"):
+        target = target[1:-1]
     try:
         infos = socket.getaddrinfo(target, None, type=socket.SOCK_STREAM)
     except socket.gaierror:

@@ -181,6 +181,10 @@ class TestResolve(unittest.TestCase):
         addrs = resolve_target("127.0.0.1")
         self.assertIn((socket.AF_INET, "127.0.0.1"), addrs)
 
+    def test_bracketed_ipv6(self):
+        addrs = resolve_target("[::1]")
+        self.assertIn((socket.AF_INET6, "::1"), addrs)
+
     def test_bad_name_exits(self):
         import unittest.mock as mock
         with mock.patch("socket.getaddrinfo",
