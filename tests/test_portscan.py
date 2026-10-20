@@ -266,3 +266,43 @@ class TestVersion(unittest.TestCase):
             main(["--version"])
         self.assertEqual(cm.exception.code, 0)
         self.assertIn("1.1.0", buf.getvalue())
+
+
+class TestMutationDeep9(unittest.TestCase):
+    """Regression tests from deep-9 mutation testing (2026-10-20)."""
+
+    def test_resolve_dedups(self):
+        # PS13: duplicate getaddrinfo entries collapse to one address.
+        dup = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("1.2.3.4", 0))] * 2
+        import unittest.mock as mock
+        with mock.patch("socket.getaddrinfo", return_value=dup):
+            self.assertEqual(resolve_target("x"), [(socket.AF_INET, "1.2.3.4")])
+
+    def test_timeout_zero_rejected(self):
+        # PS17: --timeout 0 must be rejected, not silently scanned.
+        with self.assertRaises(SystemExit) as cm:
+            main(["--target", "127.0.0.1", "--ports", "80",
+                  "--timeout", "0", "--quiet"])
+        self.assertIn("positive", str(cm.exception.code))
+
+    def test_show_progress_format(self):
+        # PS18/PS19: progress throttle step (50 divisions) and percent text.
+        from portscan import show_progress
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            show_progress(50, 100)
+        self.assertEqual(buf.getvalue(), "\r[*] 50/100 ports (50%)")
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            show_progress(10, 100)  # 10 % 2 == 0 -> prints (step = 100//50)
+        self.assertEqual(buf.getvalue(), "\r[*] 10/100 ports (10%)")
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            show_progress(11, 100)  # throttled away
+        self.assertEqual(buf.getvalue(), "")
+
+    def test_top_ports_constant(self):
+        # PS20: TOP_PORTS is a pinned 20-entry list including 443.
+        self.assertEqual(len(portscan.TOP_PORTS), 20)
+        self.assertIn(443, portscan.TOP_PORTS)
+        self.assertIn(443, parse_ports("top20"))
